@@ -1,0 +1,126 @@
+#
+# Eye candy theme.
+#
+# Authors:
+#   Krzysztof Knapik <knapsu@gmail.com>
+#
+# Screenshots:
+#   -
+#
+
+# Load dependencies.
+pmodload 'helper'
+
+function prompt_knapsu_pwd {
+  # Replace "/home/<user>" with "~"
+  local pwd="${PWD/#$HOME/~}"
+
+  if [[ "$pwd" == (#m)[/~] ]]; then
+    _prompt_knapsu_pwd="$MATCH"
+    unset MATCH
+  else
+    _prompt_knapsu_pwd="${${${${(@j:/:M)${(@s:/:)pwd}##.#?}:h}%/}//\%/%%}/${${pwd:t}//\%/%%}"
+  fi
+}
+
+function prompt_knapsu_git_info {
+  if (( _prompt_knapsu_precmd_async_pid > 0 )); then
+    # Append Git status.
+    if [[ -s "$_prompt_knapsu_precmd_async_data" ]]; then
+      alias typeset='typeset -g'
+      source "$_prompt_knapsu_precmd_async_data"
+      unalias typeset
+    fi
+
+    # Reset PID.
+    _prompt_knapsu_precmd_async_pid=0
+
+    # Redisplay prompt.
+    zle && zle reset-prompt
+  fi
+}
+
+function prompt_knapsu_precmd_async {
+  # Get Git repository information.
+  if (( $+functions[git-info] )); then
+    git-info
+    typeset -p git_info >! "$_prompt_knapsu_precmd_async_data"
+  fi
+
+  # Signal completion to parent process.
+  kill -WINCH $$
+}
+
+function prompt_knapsu_precmd {
+  setopt LOCAL_OPTIONS
+  unsetopt XTRACE KSH_ARRAYS
+
+  # Format PWD.
+  prompt_knapsu_pwd
+
+  # Kill the old process of slow commands if it is still running.
+  if (( _prompt_knapsu_precmd_async_pid > 0 )); then
+    kill -KILL "$_prompt_knapsu_precmd_async_pid" &>/dev/null
+  fi
+
+  # Compute slow commands in the background.
+  trap prompt_knapsu_git_info WINCH
+  prompt_knapsu_precmd_async &!
+  _prompt_knapsu_precmd_async_pid=$!
+}
+
+function prompt_knapsu_setup {
+  setopt LOCAL_OPTIONS
+  unsetopt XTRACE KSH_ARRAYS
+  prompt_opts=(cr percent subst)
+  _prompt_knapsu_precmd_async_pid=0
+  _prompt_knapsu_precmd_async_data="${TMPPREFIX}-prompt_knapsu_data"
+
+  # Load required functions.
+  autoload -Uz add-zsh-hook
+
+  # Add hook for calling git-info before each command.
+  add-zsh-hook precmd prompt_knapsu_precmd
+
+  # Set editor-info parameters.
+  zstyle ':prezto:module:editor:info:completing' format 'λ'
+  zstyle ':prezto:module:editor:info:keymap:primary' format '❯❯'
+  zstyle ':prezto:module:editor:info:keymap:primary:overwrite' format '☣'
+  zstyle ':prezto:module:editor:info:keymap:alternate' format '❮❮'
+
+  # Configure history search module.
+  zstyle ':prezto:module:history-substring-search' color 'yes'
+
+  # Configure git module.
+  zstyle ':prezto:module:git:info' verbose 'yes'
+  zstyle ':prezto:module:git:info:added' format '✚'
+  zstyle ':prezto:module:git:info:ahead' format '%F{cyan}↑%f'
+  zstyle ':prezto:module:git:info:behind' format '%F{cyan}↓%f'
+  zstyle ':prezto:module:git:info:branch' format '%F{magenta}%b%f'
+  zstyle ':prezto:module:git:info:commit' format '%F{cyan}%.7c%f'
+  zstyle ':prezto:module:git:info:deleted' format '✖'
+  zstyle ':prezto:module:git:info:modified' format '◼'
+  zstyle ':prezto:module:git:info:renamed' format '✱'
+  zstyle ':prezto:module:git:info:stashed' format '●'
+  zstyle ':prezto:module:git:info:unmerged' format '↯'
+  zstyle ':prezto:module:git:info:untracked' format '▲'
+  zstyle ':prezto:module:git:info:keys' format 'status' '$(coalesce "%b" "%c") %U'
+
+  # Define prompts.
+  PROMPT='%B%(!.%F{red}.%F{yellow})%n%f${SSH_TTY:+" at %F{magenta}%m%f"} in %F{green}%d%f${git_info:+" on ${(e)git_info[status]}"}
+%B%(?.%F{green}.%F{red})${editor_info[keymap]}%f%b '
+  RPROMPT='${editor_info[overwrite]}'
+  SPROMPT='correct %F{red}%R%f to %F{magenta}%r%f [ynae]? '
+  PS2='%B${editor_info[keymap]}%b '
+}
+
+function prompt_knapsu_preview {
+  local +h PROMPT=''
+  local +h RPROMPT=''
+  local +h SPROMPT=''
+
+  editor-info 2>/dev/null
+  prompt_preview_theme 'knapsu'
+}
+
+prompt_knapsu_setup "$@"
