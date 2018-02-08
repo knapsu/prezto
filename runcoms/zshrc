@@ -11,3 +11,9 @@ if [[ -s "${ZDOTDIR:-$HOME}/.zprezto/init.zsh" ]]; then
 fi
 
 # Customize to your needs...
+
+unsetopt correct
+unsetopt correct_all
+unsetopt auto_cd
+
+zstyle ':completion:*' rehash true
